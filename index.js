@@ -1,3 +1,16 @@
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+
+// A simple endpoint to respond to pings
+app.get('/keep-alive', (req, res) => {
+    res.send('Bot is alive and kicking!');
+});
+
+// Start the web server
+app.listen(port, () => {
+    console.log(`Keep-alive server listening on port ${port}`);
+});
 const { Client, GatewayIntentBits, Events } = require('discord.js');
 
 // ================= CONFIGURATION =================
