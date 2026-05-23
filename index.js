@@ -26,6 +26,28 @@ const client = new Client({
 
 let pingCount = 0;
 
+// ========== COOLDOWN SYSTEM ==========
+// Stores last reply time for each user
+const cooldowns = new Map();
+const COOLDOWN_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// ========== MULTIPLE REPLY MESSAGES ==========
+const replyMessages = [
+    "Yo @%sender%, %owner% is sleeping. Try again later ",
+    "@%sender% %owner% is offline. DM if important ",
+    "%owner% ain't here rn @%sender% . He'll see your message when he's back",
+    "Hey @%sender%, thanks for pinging! %owner% will reply soon as he's online",
+    "Noted @%sender%! %owner% is away but will get back to you"
+];
+// Helper function to get a random reply message
+function getRandomReply(senderName, ownerName) {
+    const randomIndex = Math.floor(Math.random() * replyMessages.length);
+    let message = replyMessages[randomIndex];
+    message = message.replace(/%sender%/g, senderName);
+    message = message.replace(/%owner%/g, ownerName);
+    return message;
+}
+
 client.once(Events.ClientReady, async (c) => {
     console.log(`✅ ${c.user.tag} is online and acting as your PA!`);
     console.log(`📡 Monitoring pings for user ID: ${YOUR_USER_ID}`);
@@ -37,6 +59,8 @@ client.once(Events.ClientReady, async (c) => {
     });
     
     console.log(`\n🎯 Bot is ready! Set your status to offline/invisible to activate auto-replies.`);
+    console.log(`⏰ Cooldown: ${COOLDOWN_TIME / 60000} minutes per user`);
+    console.log(`💬 Loaded ${replyMessages.length} random reply messages`);
     
     // ========== AUTO-NICKNAME SYNC ==========
     async function syncBotNickname() {
@@ -48,7 +72,7 @@ client.once(Events.ClientReady, async (c) => {
                 const yourDisplayName = yourMember?.nickname || yourMember?.user.globalName || yourMember?.user.username;
                 
                 if (yourDisplayName && botMember) {
-                    const botNickname = yourDisplayName; // Bot uses same name as you
+                    const botNickname = yourDisplayName;
                     await botMember.setNickname(botNickname);
                     console.log(`   📝 Synced nickname in ${guild.name} to: ${botNickname}`);
                 }
@@ -58,9 +82,8 @@ client.once(Events.ClientReady, async (c) => {
         }
     }
     
-    // Run sync every minute
     setInterval(syncBotNickname, 60000);
-    syncBotNickname(); // Run once immediately
+    syncBotNickname();
     // ========================================
 });
 
@@ -70,6 +93,17 @@ client.on(Events.MessageCreate, async (message) => {
     
     const isMentioned = message.mentions.users.has(YOUR_USER_ID);
     if (!isMentioned) return;
+    
+    // ========== CHECK COOLDOWN ==========
+    const userId = message.author.id;
+    const now = Date.now();
+    const lastReply = cooldowns.get(userId);
+    
+    if (lastReply && (now - lastReply) < COOLDOWN_TIME) {
+        const remainingTime = Math.ceil((COOLDOWN_TIME - (now - lastReply)) / 1000 / 60);
+        console.log(`   ⏰ Cooldown active for ${message.author.tag} - ${remainingTime} minutes remaining`);
+        return; // Don't reply
+    }
     
     // Force fetch your member data with presence
     let yourMember = message.guild.members.cache.get(YOUR_USER_ID);
@@ -109,7 +143,8 @@ client.on(Events.MessageCreate, async (message) => {
     if (!isOffline) return;
     
     try {
-        const replyMessage = `Hello @${senderDisplayName}, I am assistant of ${yourDisplayName}.He is currently offline. If your message is important please DM to ${yourDisplayName}!`;
+        // Get a random reply message
+        const replyMessage = getRandomReply(senderDisplayName, yourDisplayName);
         
         await message.reply({
             content: replyMessage,
@@ -117,7 +152,12 @@ client.on(Events.MessageCreate, async (message) => {
                 users: [message.author.id]
             }
         });
+        
+        // Update cooldown after successful reply
+        cooldowns.set(userId, now);
+        
         console.log(`   ✅ Replied to ${senderDisplayName}`);
+        console.log(`   📝 Used message ${(pingCount % replyMessages.length) + 1}/${replyMessages.length}`);
     } catch (error) {
         console.error(`   ❌ Failed to reply: ${error.message}`);
     }
