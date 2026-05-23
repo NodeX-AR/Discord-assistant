@@ -109,7 +109,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (!isOffline) return;
     
     try {
-        const replyMessage = `Hello @${senderDisplayName}, I am assistant of ${yourDisplayName}. If your message is important please DM to ${yourDisplayName}!`;
+        const replyMessage = `Hello @${senderDisplayName}, I am assistant of ${yourDisplayName}.He is currently offline. If your message is important please DM to ${yourDisplayName}!`;
         
         await message.reply({
             content: replyMessage,
