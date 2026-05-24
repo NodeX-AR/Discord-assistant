@@ -39,12 +39,33 @@ const replyMessages = [
     "Hey @%sender%, thanks for pinging! %owner% will reply soon as he's online",
     "Noted @%sender%! %owner% is away but will get back to you"
 ];
-// Helper function to get a random reply message
+
+// ========== SPECIAL REPLIES WHEN BOT IS PINGED (CORRECTION MESSAGES) ==========
+const botPingReplies = [
+    "Hey @%sender%, you've got the wrong person! You meant to ping <@%owner_id%> not me.",
+    "@%sender% I think you made a mistake - I'm just his assistant! You want <@%owner_id%>.",
+    "Oops @%sender%! You pinged me by accident. <@%owner_id%> is who you're looking for.",
+    "@%sender% You've mistaken me for <@%owner_id%>! I'm just his assistant, not him.",
+    "Hey @%sender%, I'm not %owner_name%! You want <@%owner_id%> for that",
+    "Sorry @%sender%, but I'm not %owner_name%! Please ping <@%owner_id%> instead."
+];
+
+// Helper function to get a random reply message (for user pings)
 function getRandomReply(senderName, ownerName) {
     const randomIndex = Math.floor(Math.random() * replyMessages.length);
     let message = replyMessages[randomIndex];
     message = message.replace(/%sender%/g, senderName);
     message = message.replace(/%owner%/g, ownerName);
+    return message;
+}
+
+// Helper function for bot ping replies (correction messages)
+function getRandomBotReply(senderName, ownerName, ownerId) {
+    const randomIndex = Math.floor(Math.random() * botPingReplies.length);
+    let message = botPingReplies[randomIndex];
+    message = message.replace(/%sender%/g, senderName);
+    message = message.replace(/%owner_name%/g, ownerName);
+    message = message.replace(/%owner_id%/g, ownerId);
     return message;
 }
 
@@ -59,8 +80,10 @@ client.once(Events.ClientReady, async (c) => {
     });
     
     console.log(`\n🎯 Bot is ready! Set your status to offline/invisible to activate auto-replies.`);
-    console.log(`⏰ Cooldown: ${COOLDOWN_TIME / 60000} minutes per user`);
-    console.log(`💬 Loaded ${replyMessages.length} random reply messages`);
+    console.log(`🔔 SPECIAL FEATURE: Bot will CORRECT people when they ping it by mistake`);
+    console.log(`⏰ Cooldown for user pings: ${COOLDOWN_TIME / 60000} minutes per user`);
+    console.log(`💬 Loaded ${replyMessages.length} random reply messages for user pings`);
+    console.log(`💬 Loaded ${botPingReplies.length} correction messages for bot pings`);
     
     // ========== AUTO-NICKNAME SYNC ==========
     async function syncBotNickname() {
@@ -91,8 +114,53 @@ client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
     if (!message.guild) return;
     
-    const isMentioned = message.mentions.users.has(YOUR_USER_ID);
-    if (!isMentioned) return;
+    // ========== SPECIAL CASE: BOT IS PINGED DIRECTLY ==========
+    const isBotMentioned = message.mentions.users.has(client.user.id);
+    
+    if (isBotMentioned) {
+        const senderMember = message.guild.members.cache.get(message.author.id);
+        const senderDisplayName = senderMember?.nickname || message.author.globalName || message.author.username;
+        
+        // Get your info for the correction message
+        let yourMember = message.guild.members.cache.get(YOUR_USER_ID);
+        if (!yourMember) {
+            try {
+                yourMember = await message.guild.members.fetch(YOUR_USER_ID);
+            } catch (error) {
+                console.log(`⚠️ Could not fetch your info: ${error.message}`);
+            }
+        }
+        
+        const yourDisplayName = yourMember?.nickname || yourMember?.user.globalName || yourMember?.user.username || "the user";
+        
+        pingCount++;
+        console.log(`\n🤖 BOT PING #${pingCount} (MISTAKEN IDENTITY)`);
+        console.log(`   From: ${message.author.tag} (${senderDisplayName})`);
+        console.log(`   Server: ${message.guild.name}`);
+        console.log(`   Channel: #${message.channel.name}`);
+        console.log(`   Message: ${message.content.slice(0, 50)}${message.content.length > 50 ? '...' : ''}`);
+        
+        try {
+            // Get a random correction message
+            const replyMessage = getRandomBotReply(senderDisplayName, yourDisplayName, YOUR_USER_ID);
+            
+            await message.reply({
+                content: replyMessage,
+                allowedMentions: { 
+                    users: [message.author.id, YOUR_USER_ID]
+                }
+            });
+            
+            console.log(`   ✅ Corrected ${senderDisplayName} (they pinged bot by mistake)`);
+        } catch (error) {
+            console.error(`   ❌ Failed to reply: ${error.message}`);
+        }
+        return; // Don't process further (skip normal user ping logic)
+    }
+    
+    // ========== NORMAL CASE: USER IS PINGED ==========
+    const isUserMentioned = message.mentions.users.has(YOUR_USER_ID);
+    if (!isUserMentioned) return;
     
     // ========== CHECK COOLDOWN ==========
     const userId = message.author.id;
@@ -130,10 +198,9 @@ client.on(Events.MessageCreate, async (message) => {
     
     const senderMember = message.guild.members.cache.get(message.author.id);
     const senderDisplayName = senderMember?.nickname || message.author.globalName || message.author.username;
-    const yourDisplayName = yourMember?.nickname || client.user.globalName || client.user.username;
+    const yourDisplayName = yourMember?.nickname || yourMember?.user.globalName || yourMember?.user.username;
     
-    pingCount++;
-    console.log(`\n📨 Ping #${pingCount}`);
+    console.log(`\n📨 User Ping #${pingCount}`);
     console.log(`   From: ${message.author.tag} (${senderDisplayName})`);
     console.log(`   Server: ${message.guild.name}`);
     console.log(`   Channel: #${message.channel.name}`);
