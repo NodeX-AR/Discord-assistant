@@ -144,10 +144,13 @@ client.on(Events.MessageCreate, async (message) => {
             // Get a random correction message
             const replyMessage = getRandomBotReply(senderDisplayName, yourDisplayName, YOUR_USER_ID);
             
+            // FIX: Use a Set to remove duplicates, then convert to array
+            const mentionUsers = [...new Set([message.author.id, YOUR_USER_ID])];
+            
             await message.reply({
                 content: replyMessage,
                 allowedMentions: { 
-                    users: [message.author.id, YOUR_USER_ID]
+                    users: mentionUsers
                 }
             });
             
